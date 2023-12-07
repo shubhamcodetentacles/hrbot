@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Interviewer</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.0.8/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</head>
+
+<body class="bg-light">
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">HR Interviewer - Developer Position</h1>
+
+        <div id="question-container" class="card p-3">
+            <p id="question" class="mb-3"></p>
+            <audio id="audio-preview" controls style="display: none;"></audio>
+            <button id="submit-answer" class="btn btn-primary">Submit Answer</button>
+        </div>
+
+        <div id="assessment-container" class="card p-3 mt-4" style="display: none;">
+            <h2 class="mb-3">Assessment Result:</h2>
+            <p id="assessment"></p>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            let mediaRecorder;
+            let audioChunks = [];
+            let currentAudio;
+
+            // Function to get the next question
+            function getQuestion() {
+                $.get("/get_question", function (data) {
+                    if (data.question) {
+                        $("#question").text("Question: " + data.question);
+
+                        // Pause and reset the current audio, if any
+                        if (currentAudio) {
+                            currentAudio.pause();
+                            currentAudio.currentTime = 0;
+                        }
+
+                        // Create a new audio element for the current question
+                        currentAudio = new Audio("/static/question.mp3"); // Update the path accordingly
+                        currentAudio.play();
+
+                        // Reset audioChunks for the next question
+                        audioChunks = [];
+                    } else {
+                        // No more questions, show assessment
+                        $("#question-container").hide();
+                        getAssessment();
+                    }
+                });
+            }
+
+            // Function to start recording
+            function startRecording() {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(function (stream) {
+                        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                        mediaRecorder.ondataavailable = function (event) {
+                            if (event.data.size > 0) {
+                                audioChunks.push(event.data);
+                            }
+                        };
+                        mediaRecorder.onstop = function () {
+                            let audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+                            // Convert the audio to mp3 format
+                            convertToMp3(audioBlob);
+                        };
+                        mediaRecorder.start();
+                    })
+                    .catch(function (error) {
+                        console.error("Error accessing microphone:", error);
+                    });
+            }
+
+            // Function to convert audio to mp3
+            function convertToMp3(blob) {
+                const reader = new FileReader();
+                reader.onloadend = function () {
+                    const audioData = reader.result.split(',')[1]; // Get base64 data
+
+                    // Send the mp3 data to the server
+                    $.ajax({
+                        type: "POST",
+                        url: "/submit_answer",
+                        data: { answer: audioData },
+                        success: function (data) {
+                            if (data.status === "success") {
+                                // Move to the next question
+                                getQuestion();
+                            }
+                        },
+                    });
+                };
+                reader.readAsDataURL(blob);
+            }
+
+            // Function to get the assessment
+            function getAssessment() {
+                $.get("/get_assessment", function (data) {
+                    $("#assessment").text(data.assessment);
+                    $("#assessment-container").show();
+                });
+            }
+
+            // Initial setup
+            getQuestion();
+            startRecording(); // Start recording automatically when the page loads
+
+            // Event handler for submitting the answer
+            $("#submit-answer").click(function () {
+                if (mediaRecorder && mediaRecorder.state === "recording") {
+                    mediaRecorder.stop();
+                }
+            });
+        });
+    </script>
+
+</body>
+
+</html>
