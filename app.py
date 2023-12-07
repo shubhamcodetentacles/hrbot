@@ -5,7 +5,7 @@ from pathlib import Path
 app = Flask(__name__)
 
 # OpenAI API key
-api_key = "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"
+api_key = "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"
 openai_client = OpenAI(api_key=api_key)
 
 # Initialize interview questions and audio file paths as empty lists
